@@ -399,17 +399,47 @@ class olc6502:
         return 0
 
     def LDA(self):
-        pass
+        self.fetch()
+        self.A = self.fetched
+        self.setFlag("Z", self.A == 0)
+        self.setFlag("N", self.A & 0x80)
+        return 1
+
     def LDX(self):
-        pass
+        self.fetch()
+        self.X = self.fetched
+        self.setFlag("Z", self.X == 0)
+        self.setFlag("N", self.X & 0x80)
+        return 1
+
     def LDY(self):
-        pass
+        self.fetch()
+        self.Y = self.fetched
+        self.setFlag("Z", self.Y == 0)
+        self.setFlag("N", self.Y & 0x80)
+        return 1
+
     def LSR(self):
-        pass
+        self.fetch()
+        self.setFlag("C", self.fetched & 0x0001)
+        temp = self.fetched >> 1
+        self.setFlag("Z", temp & 0x00FF == 0)
+        self.setFlag("N", temp & 0x80)
+        if INSTRUCTION(self.opcode).address_mode == self.IMP:
+            self.A = temp & 0x00FF
+        else:
+            self.write(self.addr_abs, temp & 0x00FF)
+        return 0
+
     def NOP(self):
-        pass
+        return 0
+
     def ORA(self):
-        pass
+        self.fetch()
+        self.A = self.A | self.fetched
+        self.setFlag("Z", self.A == 0)
+        self.setFlag("N", self.A & 0x80)
+        return 1
 
     def PHA(self):
         self.write(0x100 + self.STKP, self.A)
@@ -417,7 +447,11 @@ class olc6502:
         return 0
 
     def PHP(self):
-        pass
+        self.write(0x100 + self.STKP, self.status | self.FLAGS6502["B"] | self.FLAGS6502["U"])
+        self.STKP -= 1
+        self.setFlag("B", 0)
+        self.setFlag("U", 1)
+        return 0
 
     def PLA(self):
         self.STKP += 1
@@ -427,11 +461,28 @@ class olc6502:
         return 0
 
     def PLP(self):
-        pass
+        self.STKP += 1
+        self.status = self.read(0x100 + self.STKP)
+        self.setFlag("U", 1)
+        return 0
+
     def ROL(self):
-        pass
+        self.fetch()
+        temp = fetched << 1 | self.getFlag("C")
+        self.setFlag("C", self.fetched & 0xFF00)
+        self.setFlag("Z", temp & 0x00FF == 0x0000)
+        self.setFlag("N", temp & 0x80)
+        if INSTRUCTION(self.opcode).address_mode == self.IMP:
+            self.A = temp & 0x00FF
+        else:
+            self.write(self.addr_abs, temp & 0x00FF)
+
+        return 0
+
     def ROR(self):
-        pass
+        self.fetch()
+        temp = (getFlag("C") << 7) | (self.fetched >> 1)
+
     def RTI(self):
         pass
     def RTS(self):
