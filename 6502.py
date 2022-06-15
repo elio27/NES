@@ -4,8 +4,8 @@ import numpy as np
 class INSTRUCTION:
     def __init__(self, data):
         self.name = data[0]
-        self.address_mode = data[1]
-        self.operate = data[2]
+        self.operate = data[1]
+        self.address_mode = data[2]
         self.cycles = data[3]
 
 
@@ -153,13 +153,13 @@ class cpu6502:
         return self.bus.read(address)
 
     def getFlag(self, flag):
-        return self.status & self.FLAGS6502[flag]
+        return int(bool(self.status & self.FLAGS6502[flag]))
 
     def setFlag(self, flag, value):
         if value:
-            self.status |= self.getFlag(flag)
+            self.status |= self.FLAGS6502[flag]
         else:
-            self.status &= ~self.getFlag(flag)
+            self.status &= ~self.FLAGS6502[flag]
 
     # Addressing Modes
     def IMP(self):
@@ -172,39 +172,39 @@ class cpu6502:
         return 0
 
     def ZP0(self):
-        self.addr_abs = self.read(self.PC)
         self.PC += 1
+        self.addr_abs = self.read(self.PC)
         self.addr_abs &= 0x00FF
         return 0
 
     def ZPX(self):
-        self.addr_abs = (self.read(self.PC) + self.X) & 0x00FF
         self.PC += 1
+        self.addr_abs = (self.read(self.PC) + self.X) & 0x00FF
 
     def ZPY(self):
-        self.addr_abs = (self.read(self.PC) + self.Y) & 0x00FF
         self.PC += 1
+        self.addr_abs = (self.read(self.PC) + self.Y) & 0x00FF
 
     def REL(self):
-        self.addr_rel = self.read(self.PC)
         self.PC += 1
+        self.addr_rel = self.read(self.PC)
         if self.addr_rel & 0x80:
-            self.addr_rel |= 0xFF00
+            self.addr_rel -= 0xff
         return 0
 
     def ABS(self):
+        self.PC += 1
         lo = self.read(self.PC)
         self.PC += 1
         hi = self.read(self.PC)
-        self.PC += 1
         self.addr_abs = (hi << 8) | lo
         return 0
 
     def ABX(self):
+        self.PC += 1
         lo = self.read(self.PC)
         self.PC += 1
         hi = self.read(self.PC)
-        self.PC += 1
         self.addr_abs = (hi << 8) | lo
         self.addr_abs += self.X
 
@@ -214,10 +214,10 @@ class cpu6502:
             return 0
 
     def ABY(self):
+        self.PC += 1
         lo = self.read(self.PC)
         self.PC += 1
         hi = self.read(self.PC)
-        self.PC += 1
         self.addr_abs = (hi << 8) | lo
         self.addr_abs += self.Y
 
@@ -227,17 +227,17 @@ class cpu6502:
             return 0
 
     def IND(self):
+        self.PC += 1
         ptr_lo = self.read(self.PC)
         self.PC += 1
         ptr_hi = self.read(self.PC)
-        self.PC += 1
         ptr = (ptr_hi << 8) | ptr_lo
         self.addr_abs = (self.read(ptr + 1) << 8) | self.read(ptr)
         return 0
 
     def IZX(self):
-        t = self.read(self.PC)
         self.PC += 1
+        t = self.read(self.PC)
 
         lo = self.read((t + self.X) & 0x00FF)
         hi = self.read((t + self.X + 1) & 0x00FF)
@@ -246,8 +246,8 @@ class cpu6502:
         return 0
 
     def IZY(self):
-        t = self.read(self.PC)
         self.PC += 1
+        t = self.read(self.PC)
 
         lo = self.read((t + self.Y) & 0x00FF)
         hi = self.read((t + self.Y + 1) & 0x00FF)
@@ -513,6 +513,7 @@ class cpu6502:
         self.fetch()
         self.A = self.fetched
         self.setFlag("Z", self.A == 0)
+        print(self.A == 0)
         self.setFlag("N", self.A & 0x80)
         return 1
 
@@ -763,30 +764,36 @@ class cpu6502:
     def display(self):
         print("\n")
         # Local registers
-        print("PC: " + hex(self.PC))
-        print("A: " + hex(self.A))
-        print("X: " + hex(self.X))
-        print("Y: " + hex(self.Y))
+        print("PC: " + hex(self.PC - 1) + f" [{self.PC}]" + f"      N: {self.getFlag('N')}      V: {self.getFlag('V')}")
+        print("A: " + hex(self.A) + f" [{self.A}]" + f"      B: {self.getFlag('B')}")
+        print("X: " + hex(self.X) + f" [{self.X}]" + f"      D: {self.getFlag('D')}      I: {self.getFlag('I')}")
+        print("Y: " + hex(self.Y) + f" [{self.Y}]" + f"      Z: {self.getFlag('Z')}      C: {self.getFlag('C')}")
+        print("Cycles: " + str(self.cycles))
+        print("Instruction: " + INSTRUCTION(self.codes[self.opcode]).name)
+        print("Addr mode: " + str(INSTRUCTION(self.codes[self.opcode]).address_mode))
+        print("Addr Abs: " + hex(self.addr_abs) + f" [{self.read(self.addr_abs)}]")
+        if self.addr_rel:
+            print("Addr Rel: " + hex(self.addr_rel) + f" [{self.addr_rel}]")
+
+        print("Fetched: " + hex(self.fetched))
 
         # Ram overview
-        print(self.bus.ram[0x0000:0x00F0])
-        print("\n")
-        print(self.bus.ram[0x8000:0x80F0])
+        print(self.bus.ram[0x0000:0x00F0], self.bus.ram[0x8000:0x80F0])
         input("Press Enter...")
 
     # Clock
     def clock(self):
-        self.display()
         if self.cycles == 0:
+
             self.opcode = self.read(self.PC)
-            self.PC += 1
             instruction = INSTRUCTION(self.codes[self.opcode])
             self.cycles = instruction.cycles
 
-            additionnal_cycle1 = instruction.address_mode(self)
-            additionnal_cycle2 = instruction.operate(self)
-
-            self.cycles += (additionnal_cycle1 & additionnal_cycle2)
+            additionnal_cycle1 = instruction.address_mode()
+            additionnal_cycle2 = instruction.operate()
+            self.cycles += (additionnal_cycle1 and additionnal_cycle2)
+            self.PC += 1
+            self.display()
 
         self.cycles -= 1
 
@@ -801,4 +808,5 @@ class cpu6502:
 
         self.reset()
         return True
+
 
