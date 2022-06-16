@@ -189,7 +189,7 @@ class cpu6502:
         self.PC += 1
         self.addr_rel = self.read(self.PC)
         if self.addr_rel & 0x80:
-            self.addr_rel -= 0xff
+            self.addr_rel = -(0xFF - self.addr_rel) - 1
         return 0
 
     def ABS(self):
@@ -339,6 +339,7 @@ class cpu6502:
     def BMI(self):
         if self.getFlag("N") == 1:
             self.cycles += 1
+            print(self.PC, self.addr_rel)
             self.addr_abs = self.PC + self.addr_rel
 
             if (self.addr_abs & 0xFF00) != (self.PC & 0xFF00):
@@ -761,39 +762,48 @@ class cpu6502:
                         DISPLAY FUNCTION
     #############################################################################
     """
-    def display(self):
+    def display(self, instruction):
         print("\n")
         # Local registers
-        print("PC: " + hex(self.PC - 1) + f" [{self.PC}]" + f"      N: {self.getFlag('N')}      V: {self.getFlag('V')}")
-        print("A: " + hex(self.A) + f" [{self.A}]" + f"      B: {self.getFlag('B')}")
-        print("X: " + hex(self.X) + f" [{self.X}]" + f"      D: {self.getFlag('D')}      I: {self.getFlag('I')}")
-        print("Y: " + hex(self.Y) + f" [{self.Y}]" + f"      Z: {self.getFlag('Z')}      C: {self.getFlag('C')}")
+        print("PC: " + hex(self.PC) + f"      Flags:  N: {self.getFlag('N')}      V: {self.getFlag('V')}")
+        print("A: " + hex(self.A) + f" [{self.A}]" + f"              B: {self.getFlag('B')}")
+        print("X: " + hex(self.X) + f" [{self.X}]" + f"              D: {self.getFlag('D')}      I: {self.getFlag('I')}")
+        print("Y: " + hex(self.Y) + f" [{self.Y}]" + f"              Z: {self.getFlag('Z')}      C: {self.getFlag('C')}")
         print("Cycles: " + str(self.cycles))
-        print("Instruction: " + INSTRUCTION(self.codes[self.opcode]).name)
-        print("Addr mode: " + str(INSTRUCTION(self.codes[self.opcode]).address_mode))
+        print("Instruction: " + instruction.name)
+        print("Addr mode: " + str(instruction.address_mode))
         print("Addr Abs: " + hex(self.addr_abs) + f" [{self.read(self.addr_abs)}]")
         if self.addr_rel:
             print("Addr Rel: " + hex(self.addr_rel) + f" [{self.addr_rel}]")
 
-        print("Fetched: " + hex(self.fetched))
+        print("Fetched: " + hex(self.fetched) + f" [{self.fetched}]")
 
         # Ram overview
-        print(self.bus.ram[0x0000:0x00F0], self.bus.ram[0x8000:0x80F0])
-        input("Press Enter...")
+        print('\nRam:',
+              '\n$0000-$00FF (0th-page)\n',
+              self.bus.ram[0x0000:0x00FF],
+              '\n\n$8000-$80FF (programm data)\n',
+              self.bus.ram[0x8000:0x80FF])
+        input("Press Enter to step insruction...")
 
     # Clock
     def clock(self):
         if self.cycles == 0:
 
+            # Fetch instruction
             self.opcode = self.read(self.PC)
             instruction = INSTRUCTION(self.codes[self.opcode])
             self.cycles = instruction.cycles
 
+            # Display CPU state
+            self.display(instruction)
+
+            # Execute instruction and get additional cycles
             additionnal_cycle1 = instruction.address_mode()
             additionnal_cycle2 = instruction.operate()
-            self.cycles += (additionnal_cycle1 and additionnal_cycle2)
+            self.cycles += int(additionnal_cycle1 and additionnal_cycle2)
+
             self.PC += 1
-            self.display()
 
         self.cycles -= 1
 
@@ -809,4 +819,4 @@ class cpu6502:
         self.reset()
         return True
 
-
+    
